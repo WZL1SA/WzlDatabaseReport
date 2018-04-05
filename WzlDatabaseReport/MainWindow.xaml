@@ -7,6 +7,10 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-        
+        <Button x:Name="CreateReportBtn"
+                Content="Create report" 
+                Click="CreateReportBtn_Click" 
+                Width="100" 
+                Height="30"/>
     </Grid>
 </Window>

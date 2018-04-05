@@ -12,6 +12,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using WzlDatabaseReport.Report;
 
 namespace WzlDatabaseReport
 {
@@ -23,6 +24,19 @@ namespace WzlDatabaseReport
         public MainWindow()
         {
             InitializeComponent();
+        }
+
+        private void CreateReportBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var pdfReport = new PdfReport()
+            {
+                Title = "Raport z bazy AzureDB, tabela Customer",
+                Author = "Ja",
+                CoverImagePath = "image.png"
+            };
+            var report = pdfReport.CreateReport();
+            report.Save(string.Format("report_{0}.pdf", Guid.NewGuid()));
+            MessageBox.Show("Zapisano plik", "Sukces", MessageBoxButton.OK, MessageBoxImage.Exclamation);
         }
     }
 }
