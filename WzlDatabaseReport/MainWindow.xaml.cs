@@ -28,15 +28,19 @@ namespace WzlDatabaseReport
 
         private void CreateReportBtn_Click(object sender, RoutedEventArgs e)
         {
-            var pdfReport = new PdfReport()
+            // Tworzenie raportu PDF
+            var pdfReport = new PdfReport
             {
                 Title = "Raport z bazy AzureDB, tabela Customer",
                 Author = "Ja",
                 CoverImagePath = "image.png"
             };
+            // Generowanie raportu
             var report = pdfReport.CreateReport();
-            report.Save(string.Format("report_{0}.pdf", Guid.NewGuid()));
-            MessageBox.Show("Zapisano plik", "Sukces", MessageBoxButton.OK, MessageBoxImage.Exclamation);
+            // Zapis do pliku
+            report.Save($"report_{Guid.NewGuid()}.pdf");
+            // Komunikat o udanym zapisie
+            MessageBox.Show("Zapisano plik", "Sukces", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 }

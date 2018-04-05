@@ -12,34 +12,66 @@ using System.Threading.Tasks;
 
 namespace WzlDatabaseReport.Report
 {
-    class PdfReport
+    /// <summary>
+    /// Klasa do tworzenia raportów z bazy danych
+    /// </summary>
+    internal class PdfReport
     {
+        /// <summary>
+        /// Tytuł raportu
+        /// </summary>
         public string Title { get; set; }
+        /// <summary>
+        /// Opis raportu (podtytuł)
+        /// </summary>
         public string Description { get; set; }
+        /// <summary>
+        /// Dane autora/autorów
+        /// </summary>
         public string Author { get; set; }
+        /// <summary>
+        /// Czas raportu
+        /// </summary>
         public DateTime Time { get; set;}
+        /// <summary>
+        /// Ścieżka do pliku z logo
+        /// </summary>
         public string CoverImagePath { get; set; }
 
-        private Document document;
+        private Document _document;
 
+        /// <summary>
+        /// Metoda eksportuje raport do pliku PDF
+        /// </summary>
+        /// <returns>Obiekt reprezentujący dokument PDF</returns>
         public PdfDocument CreateReport()
         {
+            // Dokument PDF (PDFSharp)
             var pdfDocument = new PdfDocument();
 
-            document = new Document();
-            DefineStyles(document);
+            // Dokument MigraDoc
+            _document = new Document();
 
+            // Definicja styli
+            DefineStyles(_document);
+
+            // Tworzymy stronę tytułową
             CreateTitlePage();
 
+            // Dodanie spisu treści
             CreateTableOfContents();
 
+            // Sekcja wprowadzenie
             CreateIntroduction();
 
+            // Dodanie tabeli z danymi
             CreateDataTable();
 
-            var renderer = new DocumentRenderer(document);
+            // Generator dokumentu
+            var renderer = new DocumentRenderer(_document);
             renderer.PrepareDocument();
-            for (int i = 0; i < renderer.FormattedDocument.PageCount; i++)
+            // Dodanie kolejnych stron- każda sekcja to co najmniej jedna strona
+            for (var i = 0; i < renderer.FormattedDocument.PageCount; i++)
             {
                 var gfx = XGraphics.FromPdfPage(pdfDocument.AddPage());
                 renderer.RenderPage(gfx, i+1);
@@ -49,14 +81,17 @@ namespace WzlDatabaseReport.Report
 
         private void CreateDataTable()
         {
-            var section = document.AddSection();
+            // Utowrzenie sekcji i nagłówka
+            var section = _document.AddSection();
             var paragraph = section.AddParagraph("Tabela danych");
             paragraph.Style = "Title";
+            // Dodanie bookmarku pozwala klikać w spisie treści (interaktywny PDF)
             paragraph.AddBookmark("Tabela");
 
+            // Dodanie tabeli
             var table = section.AddTable();
             table.Style = "Table";
-            table.Borders.Color = getColor(System.Drawing.Color.Black);
+            table.Borders.Color = GetColor(System.Drawing.Color.Black);
             table.Borders.Width = 0.25;
             table.Borders.Left.Width = 0.5;
             table.Borders.Right.Width = 0.5;
@@ -86,10 +121,12 @@ namespace WzlDatabaseReport.Report
             row.HeadingFormat = true;
             row.Format.Alignment = ParagraphAlignment.Center;
             row.Format.Font.Bold = true;
-            row.Shading.Color = getColor(System.Drawing.Color.LightBlue);
+            row.Shading.Color = GetColor(System.Drawing.Color.LightBlue);
 
-            string[] headers = new string[] { "ID", "Imię","Drugie imię", "Nazwisko", "e-mail", "Hasło"};
+            // Nagłówki
+            string[] headers = { "ID", "Imię","Drugie imię", "Nazwisko", "e-mail", "Hasło"};
 
+            // Dodanie nagłówków
             for (int i = 0; i < headers.Length; i++)
             {
                 row.Cells[i].AddParagraph(headers[i]);
@@ -98,15 +135,16 @@ namespace WzlDatabaseReport.Report
                 row.Cells[i].VerticalAlignment = VerticalAlignment.Center;
                 row.Cells[i].MergeDown = 1;
             }
+
             row = table.AddRow();
-            row.Shading.Color = getColor(System.Drawing.Color.LightBlue);
+            row.Shading.Color = GetColor(System.Drawing.Color.LightBlue);
 
-            table.SetEdge(0, 0, 6, 2, Edge.Box, BorderStyle.Single, 0.75, getColor(System.Drawing.Color.Black));
+            table.SetEdge(0, 0, 6, 2, Edge.Box, BorderStyle.Single, 0.75, GetColor(System.Drawing.Color.Black));
 
-
-            using (wzlEntities context = new wzlEntities())
+            // Dodanie wierszy z danymi- jeden wiersz w tabeli w bazie danych to jeden wiersz w tabeli w raporcie
+            using (var context = new wzlEntities())
             {
-                int k = 0;
+                var k = 0;
                 foreach(var item in context.Customer)
                 {
                     row = table.AddRow();                    
@@ -115,14 +153,9 @@ namespace WzlDatabaseReport.Report
                     row.Cells[2].AddParagraph(item.MiddleName ?? "");
                     row.Cells[3].AddParagraph(item.LastName);
                     row.Cells[4].AddParagraph(item.EmailAddress ?? "");
-                    row.Cells[5].AddParagraph(item.PasswordHash);
-                    if (k % 2 == 0)
-                    {
-                        row.Format.Shading.Color = getColor(System.Drawing.Color.LightGray);
-                    } else
-                    {
-                        row.Format.Shading.Color = getColor(System.Drawing.Color.NavajoWhite);
-                    }
+                    row.Cells[5].AddParagraph(AdjustIfTooWideToFitIn(row.Cells[5], item.PasswordHash));
+                    // Wiersze parzyste i nieparzyste podkreślane różnymi kolorami
+                    row.Shading.Color = GetColor(k % 2 == 0 ? System.Drawing.Color.LightGray : System.Drawing.Color.NavajoWhite);
                     k++;
                 }
             }
@@ -130,11 +163,11 @@ namespace WzlDatabaseReport.Report
 
         private void CreateIntroduction()
         {
-            var section = document.AddSection();
+            var section = _document.AddSection();
             
             var paragraph = section.AddParagraph("Wprowadzenie");
             paragraph.AddBookmark("Wprowadzenie");
-            paragraph.Style = "Title";
+            paragraph.Style = "SectionTitle";
 
             paragraph = section.AddParagraph();            
             paragraph.AddText("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin nibh augue, suscipit a, scelerisque sed, lacinia in, mi. Cras vel lorem. Etiam pellentesque aliquet tellus. Phasellus pharetra nulla ac diam. Quisque semper justo at risus. Donec venenatis, turpis vel hendrerit interdum, dui ligula ultricies purus, sed posuere libero dui id orci. Nam congue, pede vitae dapibus aliquet, elit magna vulputate arcu, vel tempus metus leo non est. Etiam sit amet lectus quis est congue mollis. Phasellus congue lacus eget neque. Phasellus ornare, ante vitae consectetuer consequat, purus sapien ultricies dolor, et mollis pede metus eget nisi. Praesent sodales velit quis augue. Cras suscipit, urna at aliquam rhoncus, urna quam viverra nisi, in interdum massa nibh nec erat.");
@@ -142,16 +175,17 @@ namespace WzlDatabaseReport.Report
             section.AddParagraph("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin nibh augue, suscipit a, scelerisque sed, lacinia in, mi. Cras vel lorem. Etiam pellentesque aliquet tellus. Phasellus pharetra nulla ac diam. Quisque semper justo at risus. Donec venenatis, turpis vel hendrerit interdum, dui ligula ultricies purus, sed posuere libero dui id orci. Nam congue, pede vitae dapibus aliquet, elit magna vulputate arcu, vel tempus metus leo non est. Etiam sit amet lectus quis est congue mollis. Phasellus congue lacus eget neque. Phasellus ornare, ante vitae consectetuer consequat, purus sapien ultricies dolor, et mollis pede metus eget nisi. Praesent sodales velit quis augue. Cras suscipit, urna at aliquam rhoncus, urna quam viverra nisi, in interdum massa nibh nec erat.");
 
             paragraph = section.AddParagraph("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin nibh augue, suscipit a, scelerisque sed, lacinia in, mi. Cras vel lorem. Etiam pellentesque aliquet tellus. Phasellus pharetra nulla ac diam. Quisque semper justo at risus. Donec venenatis, turpis vel hendrerit interdum, dui ligula ultricies purus, sed posuere libero dui id orci. Nam congue, pede vitae dapibus aliquet, elit magna vulputate arcu, vel tempus metus leo non est. Etiam sit amet lectus quis est congue mollis. Phasellus congue lacus eget neque. Phasellus ornare, ante vitae consectetuer consequat, purus sapien ultricies dolor, et mollis pede metus eget nisi. Praesent sodales velit quis augue. Cras suscipit, urna at aliquam rhoncus, urna quam viverra nisi, in interdum massa nibh nec erat.");
-            paragraph.Format.Font.Color = getColor(System.Drawing.Color.DarkGreen);          
+            paragraph.Format.Font.Color = GetColor(System.Drawing.Color.DarkGreen);          
 
         }
 
         private void CreateTableOfContents()
         {
-            if (document == null) return;
-            var section = document.AddSection();
+            if (_document == null) return;
+            var section = _document.AddSection();
 
             var paragraph = section.AddParagraph("Spis treści");
+            paragraph.Style = "SectionTitle";
             paragraph = section.AddParagraph();
             var hyperlink = paragraph.AddHyperlink("Wprowadzenie");
             hyperlink.AddText("Wprowadzenie do raportu");
@@ -168,9 +202,9 @@ namespace WzlDatabaseReport.Report
 
         private void CreateTitlePage()
         {
-            if (document == null) return;
+            if (_document == null) return;
 
-            var section = document.AddSection();
+            var section = _document.AddSection();
             var image = section.AddImage(CoverImagePath);
 
             image.Width = Unit.FromCentimeter(8);
@@ -191,15 +225,18 @@ namespace WzlDatabaseReport.Report
             titleFrame.RelativeVertical = RelativeVertical.Page;
 
             var titleBox = titleFrame.AddParagraph(Title);
-            titleBox.Style = "Title";
-            titleBox.Format.Font.Color = getColor(System.Drawing.Color.DarkGray);
+            titleBox.Style = "SectionTitle";
+            titleBox.Format.Font.Color = GetColor(System.Drawing.Color.DarkGray);
 
             var authorBox = titleFrame.AddParagraph(Author);
             authorBox.Style = "Normal";
             
         }
 
-
+        /// <summary>
+        /// Metoda ustawia style dokumentu
+        /// </summary>
+        /// <param name="document">Dokument do skonfigurowania</param>
         void DefineStyles(Document document)
         {
             // Get the predefined style Normal.
@@ -226,26 +263,91 @@ namespace WzlDatabaseReport.Report
             style.ParagraphFormat.SpaceBefore = "5mm";
             style.ParagraphFormat.SpaceAfter = "5mm";
             style.ParagraphFormat.TabStops.AddTabStop("16cm", TabAlignment.Right);
-            style.ParagraphFormat.Font.Color = getColor(System.Drawing.Color.Black);
+            style.ParagraphFormat.Font.Color = GetColor(System.Drawing.Color.Black);
 
             // Define new style "Title", which we will use for cover Title
             style = document.Styles.AddStyle("Title", "Normal");
             style.ParagraphFormat.Font.Size = 20;
             style.ParagraphFormat.Font.Name = "Calibri";
-            style.ParagraphFormat.Font.Color = getColor(System.Drawing.Color.DarkGray);
+            style.ParagraphFormat.Font.Color = GetColor(System.Drawing.Color.DarkGray);
             style.ParagraphFormat.SpaceBefore = "10mm";
             style.ParagraphFormat.SpaceAfter = "10mm";
 
-            
+            // Define new style "Title", which we will use for cover Title
+            style = document.Styles.AddStyle("SectionTitle", "Normal");
+            style.ParagraphFormat.Font.Size = 18;
+            style.ParagraphFormat.Font.Name = "Calibri";
+            style.ParagraphFormat.Font.Color = GetColor(System.Drawing.Color.DarkGray);
+            style.ParagraphFormat.SpaceBefore = "5mm";
+            style.ParagraphFormat.SpaceAfter = "5mm";
+
+
 
         }
 
-        Color getColor(System.Drawing.Color color)
+        Color GetColor(System.Drawing.Color color)
         {
             return new Color(
                 color.R,
                 color.G,
                 color.B);
         }
+
+        /// <summary>
+        /// Metoda umożliwia złamanie zbyt długich tekstów tak, aby zmieściły się w tabeli
+        /// </summary>
+        /// <param name="cell">Komórka tabeli</param>
+        /// <param name="text">tekst do dostosowania</param>
+        /// <returns></returns>
+        private string AdjustIfTooWideToFitIn(Cell cell, string text)
+        {
+            Column column = cell.Column;
+            Unit availableWidth = column.Width - column.Table.Borders.Width - cell.Borders.Width;
+
+            var tooWideWords = text.Split(" ".ToCharArray()).Distinct().Where(s => TooWide(s, availableWidth));
+
+            var adjusted = new StringBuilder(text);
+            foreach (string word in tooWideWords)
+            {
+                var replacementWord = MakeFit(word, availableWidth);
+                adjusted.Replace(word, replacementWord);
+            }
+
+            return adjusted.ToString();
+        }
+
+        private bool TooWide(string word, Unit width)
+        {
+            var tm = new TextMeasurement(_document.Styles["Table"].Font.Clone());
+            float f = tm.MeasureString(word, UnitType.Point).Width;
+            return f > width.Point;
+        }
+
+        /// <summary>
+        /// Makes the supplied word fit into the available width
+        /// </summary>
+        /// <returns>modified version of the word with inserted Returns at appropriate points</returns>
+        private string MakeFit(string word, Unit width)
+        {
+            var adjustedWord = new StringBuilder();
+            var current = string.Empty;
+            foreach (char c in word)
+            {
+                if (TooWide(current + c, width))
+                {
+                    adjustedWord.Append(current);
+                    adjustedWord.Append(Chars.CR);
+                    current = c.ToString();
+                }
+                else
+                {
+                    current += c;
+                }
+            }
+            adjustedWord.Append(current);
+
+            return adjustedWord.ToString();
+        }
+
     }
 }
