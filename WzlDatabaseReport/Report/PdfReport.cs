@@ -46,12 +46,9 @@ namespace WzlDatabaseReport.Report
         /// <returns>Obiekt reprezentujący dokument PDF</returns>
         public PdfDocument CreateReport()
         {
-            // Dokument PDF (PDFSharp)
-            var pdfDocument = new PdfDocument();
-
             // Dokument MigraDoc
             _document = new Document();
-
+            
             // Definicja styli
             DefineStyles(_document);
 
@@ -67,16 +64,10 @@ namespace WzlDatabaseReport.Report
             // Dodanie tabeli z danymi
             CreateDataTable();
 
-            // Generator dokumentu
-            var renderer = new DocumentRenderer(_document);
-            renderer.PrepareDocument();
-            // Dodanie kolejnych stron- każda sekcja to co najmniej jedna strona
-            for (var i = 0; i < renderer.FormattedDocument.PageCount; i++)
-            {
-                var gfx = XGraphics.FromPdfPage(pdfDocument.AddPage());
-                renderer.RenderPage(gfx, i+1);
-            }
-            return pdfDocument;
+            // Generator dokumentu PDF, zachowuje polskie znaki
+            var renderer = new PdfDocumentRenderer(true, PdfFontEmbedding.Always) {Document = _document};
+            renderer.RenderDocument();
+            return renderer.PdfDocument;
         }
 
         private void CreateDataTable()
@@ -186,18 +177,36 @@ namespace WzlDatabaseReport.Report
 
             var paragraph = section.AddParagraph("Spis treści");
             paragraph.Style = "SectionTitle";
+
+
             paragraph = section.AddParagraph();
+            // Styl- TOC (tabulacja odsyła w prawo, uzupełnianie kropkami)
+            paragraph.Style = "TOC";
+            // Dodanie odnośnika do znacznika (bookmark) "Wprowadzenie"
             var hyperlink = paragraph.AddHyperlink("Wprowadzenie");
-            hyperlink.AddText("Wprowadzenie do raportu");
+            // Tekst do wyświetlenia
+            hyperlink.AddText("Wprowadzenie do raportu\t");
+            // Numer strony
+            hyperlink.AddPageRefField("Wprowadzenie");
+            // Przejście do nowej linii
             paragraph.AddLineBreak();
+
             hyperlink = paragraph.AddHyperlink("Tabela");
-            hyperlink.AddText("Podsumowanie tabelaryczne");
+            paragraph.Style = "TOC";
+            hyperlink.AddText("Podsumowanie tabelaryczne\t");
+            hyperlink.AddPageRefField("Tabela");
             paragraph.AddLineBreak();
+
             hyperlink = paragraph.AddHyperlink("Wykres");
-            hyperlink.AddText("Grupowanie na wykresie");
+            paragraph.Style = "TOC";
+            hyperlink.AddText("Grupowanie na wykresie\t");
+            hyperlink.AddPageRefField("Wykres");
             paragraph.AddLineBreak();
+
             hyperlink = paragraph.AddHyperlink("Changes");
-            hyperlink.AddText("Wykaz zmian");
+            paragraph.Style = "TOC";
+            hyperlink.AddText("Wykaz zmian\t");
+            hyperlink.AddPageRefField("Changes");
         }
 
         private void CreateTitlePage()
@@ -281,7 +290,8 @@ namespace WzlDatabaseReport.Report
             style.ParagraphFormat.SpaceBefore = "5mm";
             style.ParagraphFormat.SpaceAfter = "5mm";
 
-
+            style = document.Styles.AddStyle("TOC", "Normal");
+            style.ParagraphFormat.AddTabStop("16cm", TabAlignment.Right, TabLeader.Dots);
 
         }
 
