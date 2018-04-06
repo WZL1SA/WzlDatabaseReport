@@ -1,11 +1,13 @@
 ﻿using MigraDoc.DocumentObjectModel;
 using MigraDoc.DocumentObjectModel.Shapes;
+using MigraDoc.DocumentObjectModel.Shapes.Charts;
 using MigraDoc.DocumentObjectModel.Tables;
 using MigraDoc.Rendering;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -15,28 +17,9 @@ namespace WzlDatabaseReport.Report
     /// <summary>
     /// Klasa do tworzenia raportów z bazy danych
     /// </summary>
-    internal class PdfReport
+    internal class PdfReport : Report<PdfDocument>
     {
-        /// <summary>
-        /// Tytuł raportu
-        /// </summary>
-        public string Title { get; set; }
-        /// <summary>
-        /// Opis raportu (podtytuł)
-        /// </summary>
-        public string Description { get; set; }
-        /// <summary>
-        /// Dane autora/autorów
-        /// </summary>
-        public string Author { get; set; }
-        /// <summary>
-        /// Czas raportu
-        /// </summary>
-        public DateTime Time { get; set;}
-        /// <summary>
-        /// Ścieżka do pliku z logo
-        /// </summary>
-        public string CoverImagePath { get; set; }
+        
 
         private Document _document;
 
@@ -44,7 +27,7 @@ namespace WzlDatabaseReport.Report
         /// Metoda eksportuje raport do pliku PDF
         /// </summary>
         /// <returns>Obiekt reprezentujący dokument PDF</returns>
-        public PdfDocument CreateReport()
+        public override PdfDocument CreateReport()
         {
             // Dokument MigraDoc
             _document = new Document();
@@ -64,10 +47,79 @@ namespace WzlDatabaseReport.Report
             // Dodanie tabeli z danymi
             CreateDataTable();
 
+            //grupowanie na wykresie
+            CreateChart();
+
             // Generator dokumentu PDF, zachowuje polskie znaki
             var renderer = new PdfDocumentRenderer(true, PdfFontEmbedding.Always) {Document = _document};
             renderer.RenderDocument();
             return renderer.PdfDocument;
+        }
+
+        private void CreateChart()
+        {
+            // Utowrzenie sekcji i nagłówka
+            var section = _document.AddSection();
+            var paragraph = section.AddParagraph("Grupowanie na wykresie");
+            paragraph.Style = "SectionTitle";
+            // Dodanie bookmarku pozwala klikać w spisie treści (interaktywny PDF)
+            paragraph.AddBookmark("Wykres");
+
+            using (var context = new wzlEntities())
+            {
+                var chartData = context.Customer.GroupBy(customer => customer.LastName)
+                    .Select(group => new {group.Key, Counter=group.Count()})
+                        .GroupBy(entry => entry.Counter)
+                        .Select(value => new { value.Key, Counter=(double)value.Count()});
+
+                foreach (var item in chartData)
+                {
+                    Debug.WriteLine($"key={item.Key} and value={item.Counter}");
+                }
+
+                var chart = section.AddChart();
+                chart.Left = 0;
+                chart.Width = Unit.FromCentimeter(16);
+                chart.Height = Unit.FromCentimeter(12);
+                var series = chart.SeriesCollection.AddSeries();
+                series.ChartType = ChartType.Column2D; //wybór typu wykresu
+                series.Add(chartData.Select(item => item.Counter).ToArray());
+                var xAxis = chart.XValues.AddXSeries();
+                xAxis.Add(chartData.Select(item => item.Key.ToString()).ToArray());
+                series.HasDataLabel = true;
+                chart.XAxis.MajorTickMark = TickMarkType.Outside;
+                chart.XAxis.Title.Caption = "Częstość występowania nazwiska";
+
+                chart.YAxis.MajorTickMark = TickMarkType.Outside;
+                chart.YAxis.HasMajorGridlines = true;
+
+                chart.PlotArea.LineFormat.Color = Colors.DarkGray;
+
+
+                //var chart1 = section.AddChart();
+                var chart1 = new Chart
+                {
+                    Left = 0,
+                    Width = Unit.FromCentimeter(16),
+                    Height = Unit.FromCentimeter(12)
+                };
+                
+                var series1 = chart1.SeriesCollection.AddSeries();
+                series1.ChartType = ChartType.Line; //wybór typu wykresu
+                series1.Add(chartData.Select(item => item.Counter).ToArray());
+                var xAxis1 = chart1.XValues.AddXSeries();
+                xAxis1.Add(chartData.Select(item => item.Key.ToString()).ToArray());
+                series.HasDataLabel = true;
+                chart1.XAxis.MajorTickMark = TickMarkType.Outside;
+                chart1.XAxis.Title.Caption = "Częstość występowania nazwiska";
+
+                chart1.YAxis.MajorTickMark = TickMarkType.Outside;
+                chart1.YAxis.HasMajorGridlines = true;
+
+                chart1.PlotArea.LineFormat.Color = Colors.DarkGray;
+                section.Add(chart1);
+            }
+
         }
 
         private void CreateDataTable()
@@ -136,7 +188,9 @@ namespace WzlDatabaseReport.Report
             using (var context = new wzlEntities())
             {
                 var k = 0;
-                foreach(var item in context.Customer)
+                var items = context.Customer
+                    .Where(customer => customer.FirstName.StartsWith(SearchName));
+                foreach(var item in items)    // gdy chcemy wszystkie to używamy context.Customer)
                 {
                     row = table.AddRow();                    
                     row.Cells[0].AddParagraph(item.CustomerID.ToString());
@@ -144,7 +198,7 @@ namespace WzlDatabaseReport.Report
                     row.Cells[2].AddParagraph(item.MiddleName ?? "");
                     row.Cells[3].AddParagraph(item.LastName);
                     row.Cells[4].AddParagraph(item.EmailAddress ?? "");
-                    row.Cells[5].AddParagraph(AdjustIfTooWideToFitIn(row.Cells[5], item.PasswordHash));
+                    row.Cells[5].AddParagraph(AdjustIfTooWideToFitIn(row.Cells[5], item.PasswordHash));//funkcja zawija tekst aby dopasować do komórki
                     // Wiersze parzyste i nieparzyste podkreślane różnymi kolorami
                     row.Shading.Color = GetColor(k % 2 == 0 ? System.Drawing.Color.LightGray : System.Drawing.Color.NavajoWhite);
                     k++;
